@@ -1,0 +1,34 @@
+{
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Spring Boot-MsBaseApplication<ms_base-ms_usuario>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "cl.sanos_y_salvos.ms_base.MsBaseApplication",
+            "projectName": "ms_base-ms_usuario",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "type": "java",
+            "name": "Spring Boot-MsBaseApplication<ms_base-ms_mascota>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "cl.sanos_y_salvos.ms_base.MsBaseApplication",
+            "projectName": "ms_base-ms_mascota",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "type": "java",
+            "name": "Spring Boot-MsBaseApplication<ms_base-ms-usuario>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "cl.sanos_y_salvos.ms_base.MsBaseApplication",
+            "projectName": "ms_base-ms-usuario",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        }
+    ]
+}

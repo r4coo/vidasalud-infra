@@ -1,0 +1,16 @@
+# Docker Data (Bases de Datos locales)
+data/
+**/data/
+
+# Docker Logs
+*.log
+
+# Archivos de entorno (Si llegas a usar .env con claves de Neon)
+.env
+# Secretos
+*.pem
+.env
+
+# Cada componente vive en su propio repositorio
+/Backend/
+/frontend-vidasalud/

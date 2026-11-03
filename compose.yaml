@@ -1,0 +1,214 @@
+# VidaSalud · Docker Compose
+# Clúster RabbitMQ de 2 nodos (rabbit1 + rabbit2) + microservicios + BFF + front.
+# Variables en .env (ver .env.example). En AWS este mismo archivo se ejecuta en una EC2.
+name: vidasalud
+
+x-rabbit-env: &rabbit-env
+  RABBITMQ_ADDRESSES: rabbit1:5672,rabbit2:5672
+  RABBITMQ_USER: ${RABBITMQ_USER:-vidasalud}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-vidasalud_pass}
+
+services:
+  # ------------------------------------------------------------------ RabbitMQ
+  rabbit1:
+    image: rabbitmq:3.13-management
+    container_name: rabbit1
+    hostname: rabbit1
+    environment:
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-VIDASALUD_CLUSTER_COOKIE}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-vidasalud}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-vidasalud_pass}
+    ports:
+      - "5672:5672"
+      - "15672:15672"   # Management UI nodo 1
+    volumes:
+      - rabbit1-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    networks: [vidasalud-network]
+
+  rabbit2:
+    image: rabbitmq:3.13-management
+    container_name: rabbit2
+    hostname: rabbit2
+    depends_on:
+      rabbit1:
+        condition: service_healthy
+    environment:
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-VIDASALUD_CLUSTER_COOKIE}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-vidasalud}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-vidasalud_pass}
+    ports:
+      - "5673:5672"
+      - "15673:15672"   # Management UI nodo 2
+    volumes:
+      - rabbit2-data:/var/lib/rabbitmq
+      - ./rabbitmq/join-cluster.sh:/scripts/join-cluster.sh:ro
+    command: ["bash", "/scripts/join-cluster.sh"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 18
+      start_period: 40s
+    networks: [vidasalud-network]
+
+  # ------------------------------------------------------------ Bases de datos
+  db-appointments:
+    image: postgres:15-alpine
+    container_name: db_appointments
+    environment:
+      POSTGRES_DB: db_appointments
+      POSTGRES_USER: ${POSTGRES_USER:-vidasalud}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password123}
+    volumes:
+      - db-appointments-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vidasalud} -d db_appointments"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks: [vidasalud-network]
+
+  db-catalog:
+    image: postgres:15-alpine
+    container_name: db_catalog
+    environment:
+      POSTGRES_DB: db_catalog
+      POSTGRES_USER: ${POSTGRES_USER:-vidasalud}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password123}
+    volumes:
+      - db-catalog-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vidasalud} -d db_catalog"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks: [vidasalud-network]
+
+  db-notifications:
+    image: postgres:15-alpine
+    container_name: db_notifications
+    environment:
+      POSTGRES_DB: db_notifications
+      POSTGRES_USER: ${POSTGRES_USER:-vidasalud}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password123}
+    volumes:
+      - db-notifications-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vidasalud} -d db_notifications"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks: [vidasalud-network]
+
+  # ------------------------------------------------------------ Microservicios
+  ms-vidasalud-appointments:
+    build: ./Backend/ms-vidasalud-appointments
+    container_name: ms_vidasalud_appointments
+    depends_on:
+      db-appointments: {condition: service_healthy}
+      rabbit1: {condition: service_healthy}
+      rabbit2: {condition: service_healthy}
+    environment:
+      <<: *rabbit-env
+      SERVER_PORT: 8082
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db-appointments:5432/db_appointments
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-vidasalud}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-password123}
+    restart: unless-stopped
+    networks: [vidasalud-network]
+
+  ms-vidasalud-catalog:
+    build: ./Backend/ms-vidasalud-catalog
+    container_name: ms_vidasalud_catalog
+    depends_on:
+      db-catalog: {condition: service_healthy}
+      rabbit1: {condition: service_healthy}
+      rabbit2: {condition: service_healthy}
+    environment:
+      <<: *rabbit-env
+      SERVER_PORT: 8087
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db-catalog:5432/db_catalog
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-vidasalud}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-password123}
+    restart: unless-stopped
+    networks: [vidasalud-network]
+
+  ms-vidasalud-notification:
+    build: ./Backend/ms-vidasalud-notification
+    container_name: ms_vidasalud_notification
+    depends_on:
+      db-notifications: {condition: service_healthy}
+      rabbit1: {condition: service_healthy}
+      rabbit2: {condition: service_healthy}
+    environment:
+      <<: *rabbit-env
+      SERVER_PORT: 8085
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db-notifications:5432/db_notifications
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-vidasalud}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-password123}
+    restart: unless-stopped
+    networks: [vidasalud-network]
+
+  ms-vidasalud-rabbit-admin:
+    build: ./Backend/ms-vidasalud-rabbit-admin
+    container_name: ms_vidasalud_rabbit_admin
+    depends_on:
+      rabbit1: {condition: service_healthy}
+      rabbit2: {condition: service_healthy}
+    environment:
+      <<: *rabbit-env
+      SERVER_PORT: 8088
+    restart: unless-stopped
+    networks: [vidasalud-network]
+
+  # --------------------------------------------------------------------- BFF
+  # En AWS, API Gateway apunta a este puerto (8084). Valida de nuevo el JWT de Entra ID.
+  ms-vidasalud-bff:
+    build: ./Backend/ms-vidasalud-bff
+    container_name: ms_vidasalud_bff
+    depends_on: [ms-vidasalud-appointments, ms-vidasalud-catalog, ms-vidasalud-rabbit-admin]
+    environment:
+      SERVER_PORT: 8084
+      APPOINTMENTS_URL: http://ms-vidasalud-appointments:8082
+      CATALOG_URL: http://ms-vidasalud-catalog:8087
+      RABBIT_ADMIN_URL: http://ms-vidasalud-rabbit-admin:8088
+      FRONTEND_URLS: ${FRONTEND_URLS:-http://localhost:4200,http://localhost:3000}
+      ENTRA_TENANT_ID: ${ENTRA_TENANT_ID}
+      ENTRA_API_CLIENT_ID: ${ENTRA_API_CLIENT_ID}
+    ports:
+      - "8084:8084"
+    restart: unless-stopped
+    networks: [vidasalud-network]
+
+  # ----------------------------------------------------------- Frontend (Angular)
+  # Solo para pruebas locales: nginx sirve el front y reenvía /api al BFF.
+  # En la nube el front va en S3 + CloudFront (HTTPS) y llama a API Gateway.
+  frontend-vidasalud:
+    build:
+      context: ./frontend-vidasalud
+      args:
+        ENTRA_TENANT_ID: ${ENTRA_TENANT_ID}
+        ENTRA_SPA_CLIENT_ID: ${ENTRA_SPA_CLIENT_ID}
+        ENTRA_API_CLIENT_ID: ${ENTRA_API_CLIENT_ID}
+        API_BASE_URL: ""
+    ports:
+      - "3000:80"
+    depends_on: [ms-vidasalud-bff]
+    restart: unless-stopped
+    networks: [vidasalud-network]
+
+networks:
+  vidasalud-network:
+    driver: bridge
+
+volumes:
+  rabbit1-data:
+  rabbit2-data:
+  db-appointments-data:
+  db-catalog-data:
+  db-notifications-data:
