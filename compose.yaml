@@ -33,6 +33,7 @@ services:
   rabbit2:
     image: rabbitmq:3.13-management
     container_name: rabbit2
+    user: rabbitmq
     hostname: rabbit2
     depends_on:
       rabbit1:
@@ -195,10 +196,28 @@ services:
         ENTRA_TENANT_ID: ${ENTRA_TENANT_ID}
         ENTRA_SPA_CLIENT_ID: ${ENTRA_SPA_CLIENT_ID}
         ENTRA_API_CLIENT_ID: ${ENTRA_API_CLIENT_ID}
-        API_BASE_URL: ""
+        API_BASE_URL: ${API_BASE_URL:-}
     ports:
       - "3000:80"
     depends_on: [ms-vidasalud-bff]
+    restart: unless-stopped
+    networks: [vidasalud-network]
+
+  # ------------------------------------------------------------- HTTPS (Caddy)
+  # Certificado Let's Encrypt automático. Requiere puertos 80 y 443 abiertos y SITE_HOST en .env.
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    environment:
+      SITE_HOST: ${SITE_HOST:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [frontend-vidasalud]
     restart: unless-stopped
     networks: [vidasalud-network]
 
@@ -209,6 +228,8 @@ networks:
 volumes:
   rabbit1-data:
   rabbit2-data:
+  caddy-data:
+  caddy-config:
   db-appointments-data:
   db-catalog-data:
   db-notifications-data:

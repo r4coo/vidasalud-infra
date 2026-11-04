@@ -1,0 +1,5 @@
+# HTTPS automático (Let's Encrypt). SITE_HOST = <IP-con-puntos>.sslip.io o tu dominio.
+{$SITE_HOST} {
+	encode gzip
+	reverse_proxy frontend-vidasalud:80
+}

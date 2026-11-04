@@ -7,6 +7,13 @@ chmod 600 "$COOKIE_FILE"
 
 if [ ! -f /var/lib/rabbitmq/.joined ]; then
   rabbitmq-server -detached
+  echo "Esperando a que arranque el nodo..."
+  ok=0
+  for i in $(seq 1 60); do
+    if rabbitmq-diagnostics -q ping >/dev/null 2>&1; then ok=1; break; fi
+    sleep 2
+  done
+  [ "$ok" = 1 ] || { echo "El nodo no arrancó a tiempo"; exit 1; }
   rabbitmqctl await_startup --timeout 90
   rabbitmqctl stop_app
   rabbitmqctl reset
