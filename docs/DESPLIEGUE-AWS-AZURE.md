@@ -35,7 +35,15 @@ Todo el backend corre con `docker compose` en una sola EC2. Solo el puerto 8084 
 `./deploy/aws/create-api-gateway.sh <ec2-dns> <tenant-id> <api-client-id> <https-del-front>` crea HTTP API + autorizador JWT (issuer `https://login.microsoftonline.com/<tenant>/v2.0`, audience = Client ID de la API) + rutas `ANY /api/{proxy+}` (protegida), `OPTIONS` y `GET /api/health` (públicas) + CORS. Devuelve `https://<id>.execute-api.<región>.amazonaws.com`.
 El BFF vuelve a validar firma, issuer, audience y rol (defensa en profundidad), así que no depende solo del gateway.
 
-## 4. AWS — Front (S3 + CloudFront)
+## 4. Front con HTTPS
+### Opción A (usada en el Learner Lab): Caddy en la propia EC2
+CloudFront está bloqueado en AWS Academy, así que el front se sirve desde la EC2 con Caddy (`caddy/Caddyfile`, servicio `caddy` del compose):
+1. Abrir los puertos **80 y 443** en el grupo de seguridad (Let's Encrypt necesita el 80).
+2. En `.env`: `SITE_HOST=<IP-elástica>.sslip.io`, `API_BASE_URL=<url de API Gateway>`, `FRONTEND_URLS=https://<SITE_HOST>,http://localhost:4200`.
+3. `docker compose build frontend-vidasalud && docker compose up -d frontend-vidasalud caddy ms-vidasalud-bff`.
+4. Agregar `https://<SITE_HOST>` como Redirect URI (Single-page application) en `vidasalud-spa` y al CORS de API Gateway (`aws apigatewayv2 update-api --cors-configuration ...`).
+
+### Opción B (cuentas AWS sin restricciones): S3 + CloudFront
 `./deploy/aws/deploy-frontend.sh <bucket-unico> <tenant> <spa-client-id> <api-client-id> <url-api-gateway>`
 Imprime `https://dxxxx.cloudfront.net`: agrégala como redirect URI SPA en Entra ID y en `FRONTEND_URLS` del `.env` en EC2 (`docker compose up -d ms-vidasalud-bff`). Además, si no estaba, agrégala al CORS del API Gateway (`aws apigatewayv2 update-api --cors-configuration ...`).
 
