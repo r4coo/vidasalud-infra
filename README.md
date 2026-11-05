@@ -53,6 +53,7 @@ Variables en `.env` (nunca se sube): `ENTRA_*`, `RABBITMQ_*`, `POSTGRES_*`, `FRO
 
 ## Limitaciones conocidas
 - La guía EP1 menciona Oracle Autonomous DB; este proyecto usa **PostgreSQL** (decisión del equipo).
+- API Gateway (HTTP API) llama al BFF por su IP pública, y AWS no publica un rango fijo para limitar el puerto 8084 solo a API Gateway. La defensa es que el BFF revalida firma, emisor, audiencia y rol en cada llamada; el cierre completo requeriría VPC Link con un balanceador privado.
 - Quorum queues con 2 nodos no toleran la caída de un nodo (demo del clúster, no alta disponibilidad real).
 - Historial clínico y videollamada son de demostración (sin microservicio de fichas ni WebRTC entre pares).
 - AWS Academy (Learner Lab) bloquea CloudFront e instancias grandes; la sesión y la IP pública cambian si se detiene la instancia (usar Elastic IP).
