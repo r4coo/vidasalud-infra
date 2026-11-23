@@ -1,5 +1,6 @@
 # VidaSalud · Docker Compose
 # Clúster RabbitMQ de 2 nodos (rabbit1 + rabbit2) + microservicios + BFF + front.
+# Kafka (3 Zookeeper + 3 brokers + Kafka UI) está en compose.kafka.yaml; se levantan juntos (ver README).
 # Variables en .env (ver .env.example). En AWS este mismo archivo se ejecuta en una EC2.
 name: vidasalud
 
@@ -7,6 +8,13 @@ x-rabbit-env: &rabbit-env
   RABBITMQ_ADDRESSES: rabbit1:5672,rabbit2:5672
   RABBITMQ_USER: ${RABBITMQ_USER:-vidasalud}
   RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-vidasalud_pass}
+
+x-kafka-client-env: &kafka-client-env
+  KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka1:9092,kafka2:9092,kafka3:9092}
+
+# Limita el heap de cada JVM para que quepan RabbitMQ + Kafka en una sola EC2.
+x-java-env: &java-env
+  JAVA_TOOL_OPTIONS: "-Xms64m -Xmx350m"
 
 services:
   # ------------------------------------------------------------------ RabbitMQ
@@ -115,7 +123,7 @@ services:
       rabbit1: {condition: service_healthy}
       rabbit2: {condition: service_healthy}
     environment:
-      <<: *rabbit-env
+      <<: [*rabbit-env, *kafka-client-env, *java-env]
       SERVER_PORT: 8082
       SPRING_DATASOURCE_URL: jdbc:postgresql://db-appointments:5432/db_appointments
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-vidasalud}
@@ -131,7 +139,7 @@ services:
       rabbit1: {condition: service_healthy}
       rabbit2: {condition: service_healthy}
     environment:
-      <<: *rabbit-env
+      <<: [*rabbit-env, *kafka-client-env, *java-env]
       SERVER_PORT: 8087
       SPRING_DATASOURCE_URL: jdbc:postgresql://db-catalog:5432/db_catalog
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-vidasalud}
@@ -147,7 +155,7 @@ services:
       rabbit1: {condition: service_healthy}
       rabbit2: {condition: service_healthy}
     environment:
-      <<: *rabbit-env
+      <<: [*rabbit-env, *kafka-client-env, *java-env]
       SERVER_PORT: 8085
       SPRING_DATASOURCE_URL: jdbc:postgresql://db-notifications:5432/db_notifications
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-vidasalud}
@@ -162,7 +170,7 @@ services:
       rabbit1: {condition: service_healthy}
       rabbit2: {condition: service_healthy}
     environment:
-      <<: *rabbit-env
+      <<: [*rabbit-env, *java-env]
       SERVER_PORT: 8088
     restart: unless-stopped
     networks: [vidasalud-network]
@@ -178,6 +186,9 @@ services:
       APPOINTMENTS_URL: http://ms-vidasalud-appointments:8082
       CATALOG_URL: http://ms-vidasalud-catalog:8087
       RABBIT_ADMIN_URL: http://ms-vidasalud-rabbit-admin:8088
+      KAFKA_ADMIN_URL: http://ms-vidasalud-kafka-admin:8089
+      NOTIFICATION_URL: http://ms-vidasalud-notification:8085
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx350m"
       FRONTEND_URLS: ${FRONTEND_URLS:-http://localhost:4200,http://localhost:3000}
       ENTRA_TENANT_ID: ${ENTRA_TENANT_ID}
       ENTRA_API_CLIENT_ID: ${ENTRA_API_CLIENT_ID}

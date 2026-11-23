@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Inicializa y sube los 7 repositorios a GitHub (usuario r4coo).
-# 1) Crea ANTES los 7 repos VACÍOS en https://github.com/new (sin README ni .gitignore), públicos o privados.
+# Inicializa y sube los 8 repositorios a GitHub (usuario r4coo).
+# 1) Crea ANTES los 8 repos (incluye ms-vidasalud-kafka-admin) VACÍOS en https://github.com/new (sin README ni .gitignore), públicos o privados.
 # 2) Ejecuta desde la raíz del proyecto, en Git Bash:  bash deploy/publicar-repos.sh
 set -euo pipefail
 USER_GH="${GH_USER:-r4coo}"
@@ -29,7 +29,7 @@ push_repo() { # carpeta nombre-repo
   git push -u origin main
 }
 
-for s in ms-vidasalud-bff ms-vidasalud-appointments ms-vidasalud-catalog ms-vidasalud-notification ms-vidasalud-rabbit-admin; do
+for s in ms-vidasalud-bff ms-vidasalud-appointments ms-vidasalud-catalog ms-vidasalud-notification ms-vidasalud-rabbit-admin ms-vidasalud-kafka-admin; do
   push_repo "$ROOT/Backend/$s" "$s"
 done
 push_repo "$ROOT/frontend-vidasalud" frontend-vidasalud

@@ -1,0 +1,215 @@
+# VidaSalud · Kafka (EP5)
+# Clúster de 3 Zookeeper + 3 brokers, creación de tópicos, Kafka UI y el microservicio administrador.
+# Se levanta junto al compose principal (comparten la red vidasalud-network):
+#   docker compose -f compose.yaml -f compose.kafka.yaml up -d
+# o definiendo en .env:  COMPOSE_FILE=compose.yaml:compose.kafka.yaml   (en Windows el separador es ;)
+# Solo Kafka UI (8090) se publica al exterior; los brokers quedan dentro de la red de Docker.
+name: vidasalud
+
+x-kafka-env: &kafka-env
+  KAFKA_ZOOKEEPER_CONNECT: zookeeper1:2181,zookeeper2:2181,zookeeper3:2181
+  KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+  KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+  KAFKA_DELETE_TOPIC_ENABLE: "true"
+  KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+  KAFKA_MIN_INSYNC_REPLICAS: 2
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 3000
+  KAFKA_LOG_RETENTION_HOURS: 168
+  KAFKA_HEAP_OPTS: "-Xms256m -Xmx384m"
+
+x-kafka-health: &kafka-health
+  test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+  interval: 15s
+  timeout: 15s
+  retries: 20
+  start_period: 40s
+
+services:
+  # ---------------------------------------------------------------- Zookeeper (quórum de 3)
+  zookeeper1:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: zookeeper1
+    hostname: zookeeper1
+    environment: &zk-env
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 10
+      ZOOKEEPER_SYNC_LIMIT: 5
+      ZOOKEEPER_SERVERS: zookeeper1:2888:3888;zookeeper2:2888:3888;zookeeper3:2888:3888
+      KAFKA_HEAP_OPTS: "-Xms128m -Xmx192m"
+    volumes:
+      - zookeeper1-data:/var/lib/zookeeper/data
+      - zookeeper1-log:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    networks: [vidasalud-network]
+
+  zookeeper2:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: zookeeper2
+    hostname: zookeeper2
+    environment:
+      <<: *zk-env
+      ZOOKEEPER_SERVER_ID: 2
+    volumes:
+      - zookeeper2-data:/var/lib/zookeeper/data
+      - zookeeper2-log:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    networks: [vidasalud-network]
+
+  zookeeper3:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: zookeeper3
+    hostname: zookeeper3
+    environment:
+      <<: *zk-env
+      ZOOKEEPER_SERVER_ID: 3
+    volumes:
+      - zookeeper3-data:/var/lib/zookeeper/data
+      - zookeeper3-log:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    networks: [vidasalud-network]
+
+  # ---------------------------------------------------------------- Brokers Kafka
+  kafka1:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka1
+    hostname: kafka1
+    depends_on:
+      zookeeper1: {condition: service_healthy}
+      zookeeper2: {condition: service_healthy}
+      zookeeper3: {condition: service_healthy}
+    environment:
+      <<: *kafka-env
+      KAFKA_BROKER_ID: 1
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092
+    volumes:
+      - kafka1-data:/var/lib/kafka/data
+    healthcheck: *kafka-health
+    restart: unless-stopped
+    networks: [vidasalud-network]
+
+  kafka2:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka2
+    hostname: kafka2
+    depends_on:
+      zookeeper1: {condition: service_healthy}
+      zookeeper2: {condition: service_healthy}
+      zookeeper3: {condition: service_healthy}
+    environment:
+      <<: *kafka-env
+      KAFKA_BROKER_ID: 2
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9092
+    volumes:
+      - kafka2-data:/var/lib/kafka/data
+    healthcheck: *kafka-health
+    restart: unless-stopped
+    networks: [vidasalud-network]
+
+  kafka3:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka3
+    hostname: kafka3
+    depends_on:
+      zookeeper1: {condition: service_healthy}
+      zookeeper2: {condition: service_healthy}
+      zookeeper3: {condition: service_healthy}
+    environment:
+      <<: *kafka-env
+      KAFKA_BROKER_ID: 3
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9092
+    volumes:
+      - kafka3-data:/var/lib/kafka/data
+    healthcheck: *kafka-health
+    restart: unless-stopped
+    networks: [vidasalud-network]
+
+  # ---------------------------------------------------------- Creación de tópicos (una vez)
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka_init
+    depends_on:
+      kafka1: {condition: service_healthy}
+      kafka2: {condition: service_healthy}
+      kafka3: {condition: service_healthy}
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka1:9092,kafka2:9092,kafka3:9092
+    volumes:
+      - ./kafka/create-topics.sh:/scripts/create-topics.sh:ro
+    entrypoint: ["bash", "/scripts/create-topics.sh"]
+    restart: "no"
+    networks: [vidasalud-network]
+
+  # ------------------------------------------------------------------------- Kafka UI
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: kafka_ui
+    depends_on:
+      kafka1: {condition: service_healthy}
+      kafka2: {condition: service_healthy}
+      kafka3: {condition: service_healthy}
+    environment:
+      KAFKA_CLUSTERS_0_NAME: vidasalud
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka1:9092,kafka2:9092,kafka3:9092
+      DYNAMIC_CONFIG_ENABLED: "false"
+      AUTH_TYPE: LOGIN_FORM
+      SPRING_SECURITY_USER_NAME: ${KAFKA_UI_USER:-admin}
+      SPRING_SECURITY_USER_PASSWORD: ${KAFKA_UI_PASSWORD:?define KAFKA_UI_PASSWORD en .env}
+      JAVA_OPTS: "-Xms64m -Xmx256m"
+    ports:
+      - "8090:8080"
+    restart: unless-stopped
+    networks: [vidasalud-network]
+
+  # ------------------------------------------------------- Administrador de Kafka (API)
+  ms-vidasalud-kafka-admin:
+    build: ./Backend/ms-vidasalud-kafka-admin
+    container_name: ms_vidasalud_kafka_admin
+    depends_on:
+      kafka1: {condition: service_healthy}
+      kafka2: {condition: service_healthy}
+      kafka3: {condition: service_healthy}
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka1:9092,kafka2:9092,kafka3:9092
+      SERVER_PORT: 8089
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx256m"
+    restart: unless-stopped
+    networks: [vidasalud-network]
+
+networks:
+  vidasalud-network:
+    driver: bridge
+
+volumes:
+  zookeeper1-data:
+  zookeeper1-log:
+  zookeeper2-data:
+  zookeeper2-log:
+  zookeeper3-data:
+  zookeeper3-log:
+  kafka1-data:
+  kafka2-data:
+  kafka3-data:

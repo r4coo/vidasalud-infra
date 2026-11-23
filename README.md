@@ -11,6 +11,7 @@ Caso 1 **VidaSalud**: el paciente solicita una atención, recepción la confirma
 | `ms-vidasalud-catalog` | Catálogo: prestaciones, boxes, cupos; consume `q.atenciones.confirmar` | 8087 |
 | `ms-vidasalud-notification` | Consume `q.notificaciones` | 8085 |
 | `ms-vidasalud-rabbit-admin` | Administración de colas/exchanges/bindings (REST, solo Admin) | 8088 |
+| `ms-vidasalud-kafka-admin` | Administración de Kafka: tópicos, parámetros, grupos y lag (REST, solo Admin) | 8089 |
 | `vidasalud-infra` (este) | `compose.yaml`, RabbitMQ en clúster, Caddy, scripts de despliegue y docs | |
 
 ## Arquitectura
