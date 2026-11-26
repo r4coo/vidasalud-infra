@@ -144,6 +144,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db-catalog:5432/db_catalog
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-vidasalud}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-password123}
+      DLQ_LISTENER_ENABLED: ${DLQ_LISTENER_ENABLED:-true}
     restart: unless-stopped
     networks: [vidasalud-network]
 
