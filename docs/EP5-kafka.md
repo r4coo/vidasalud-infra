@@ -59,4 +59,6 @@ Abre el puerto 8090 en el Security Group solo para tu IP y ciérralo al terminar
 3. Kafka UI → Messages del tópico: aparecen los eventos con su partición y offset.
 4. Kafka UI → Consumers: grupos `vidasalud-analitica` y `vidasalud-alertas`, con su lag en 0.
 5. `GET /api/analytics/resumen`: contadores y cupos actualizados.
-6. En Kafka UI crear un tópico nuevo (3 particiones, 3 réplicas) para mostrar la administración.
+6. Kafka UI → Topics → *tópico* → Settings: `retention.ms=604800000` (7 días) y `cleanup.policy` (`delete` / `compact`).
+7. En Kafka UI crear un tópico nuevo (3 particiones, 3 réplicas) para mostrar la administración.
+8. En el front, pantalla **Kafka en vivo** (Admin/Recepcionista): los contadores cambian solos al agendar y confirmar.
